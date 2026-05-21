@@ -1,0 +1,105 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  HOTEL_MANAGER
+  GUEST
+}
+
+enum HotelStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  COMPLETED
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  role         Role
+  hotelId      String?
+  hotel        Hotel?    @relation(fields: [hotelId], references: [id])
+  bookings     Booking[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Hotel {
+  id        String      @id @default(uuid())
+  name      String
+  city      String
+  address   String
+  stars     Int
+  status    HotelStatus @default(ACTIVE)
+  timezone  String      @default("UTC")
+  rooms     Room[]
+  bookings  Booking[]
+  managers  User[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([city])
+  @@index([name])
+}
+
+model Room {
+  id            String    @id @default(uuid())
+  hotelId       String
+  hotel         Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  roomType      String
+  capacity      Int
+  pricePerNight Decimal   @db.Decimal(10, 2)
+  isAvailable   Boolean   @default(true)
+  bookings      Booking[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([hotelId])
+}
+
+model Booking {
+  id          String        @id @default(uuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  hotelId     String
+  hotel       Hotel         @relation(fields: [hotelId], references: [id])
+  roomId      String
+  room        Room          @relation(fields: [roomId], references: [id])
+  checkIn     DateTime      @db.Date
+  checkOut    DateTime      @db.Date
+  guestCount  Int
+  nights      Int
+  totalAmount Decimal       @db.Decimal(10, 2)
+  status      BookingStatus @default(PENDING)
+  payment     Payment?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([roomId, checkIn, checkOut, status])
+}
+
+model Payment {
+  id          String        @id @default(uuid())
+  bookingId   String        @unique
+  booking     Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  amount      Decimal       @db.Decimal(10, 2)
+  status      PaymentStatus @default(COMPLETED)
+  completedAt DateTime      @default(now())
+}

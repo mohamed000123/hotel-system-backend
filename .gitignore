@@ -36,6 +36,11 @@ Thumbs.db
 *.swo
 *~
 
-# Optional local overrides (project uses `backend/.env` as default)
+# Environment — use only `backend/.env` (no .env.local, .env.example, etc.)
+.env
 .env.local
 .env.*.local
+.env.development
+.env.production
+.env.test
+.env.example
