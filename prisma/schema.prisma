@@ -29,6 +29,14 @@ enum PaymentStatus {
   COMPLETED
 }
 
+enum RoomType {
+  STANDARD_SINGLE @map("Standard Single")
+  STANDARD_DOUBLE @map("Standard Double")
+  DELUXE_KING     @map("Deluxe King")
+  JUNIOR_SUITE    @map("Junior Suite")
+  FAMILY_ROOM     @map("Family Room")
+}
+
 model User {
   id                 String    @id @default(uuid())
   email              String    @unique
@@ -64,7 +72,7 @@ model Room {
   id            String    @id @default(uuid())
   hotelId       String
   hotel         Hotel     @relation(fields: [hotelId], references: [id], onDelete: Cascade)
-  roomType      String
+  roomType      RoomType
   capacity      Int
   pricePerNight Decimal   @db.Decimal(10, 2)
   isAvailable   Boolean   @default(true)

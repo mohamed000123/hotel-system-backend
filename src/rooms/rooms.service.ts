@@ -1,15 +1,26 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { HotelStatus, Prisma, Role, Room } from '@prisma/client';
+import {
+  BookingStatus,
+  HotelStatus,
+  Prisma,
+  Role,
+  Room,
+} from '@prisma/client';
 import { JwtPayloadUser } from '../common/interfaces/jwt-payload.interface';
-import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { HotelsService } from '../hotels/hotels.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRoomDto } from './dto/create-room.dto';
+import { ListRoomsQueryDto } from './dto/list-rooms-query.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
+import {
+  roomTypeEnumToLabel,
+  roomTypeLabelToEnum,
+} from './room-types';
 
 export interface RoomResponseDto {
   id: string;
@@ -37,7 +48,7 @@ export class RoomsService {
   async list(
     hotelId: string,
     actor: JwtPayloadUser,
-    query: PaginationQueryDto,
+    query: ListRoomsQueryDto,
   ): Promise<RoomListResponseDto> {
     const hotel = await this.assertHotelExists(hotelId);
 
@@ -47,15 +58,33 @@ export class RoomsService {
 
     const where: Prisma.RoomWhereInput = { hotelId };
 
-    if (actor.role === Role.HOTEL_MANAGER) {
+    const isInventoryManager =
+      actor.role === Role.HOTEL_MANAGER && actor.hotelId === hotelId;
+
+    if (isInventoryManager) {
       this.assertCanManageHotel(actor, hotelId);
-    } else if (actor.role === Role.GUEST) {
+    } else {
       if (hotel.status !== HotelStatus.ACTIVE) {
         throw new ForbiddenException(
           'Rooms are only visible for active hotels',
         );
       }
       where.isAvailable = true;
+
+      const dateRange = this.parseOptionalDateRange(query.checkIn, query.checkOut);
+      if (dateRange) {
+        where.NOT = {
+          bookings: {
+            some: {
+              status: {
+                in: [BookingStatus.PENDING, BookingStatus.CONFIRMED],
+              },
+              checkIn: { lt: dateRange.checkOut },
+              checkOut: { gt: dateRange.checkIn },
+            },
+          },
+        };
+      }
     }
 
     const [rooms, total] = await Promise.all([
@@ -87,7 +116,7 @@ export class RoomsService {
     const room = await this.prisma.room.create({
       data: {
         hotelId,
-        roomType: dto.roomType,
+        roomType: roomTypeLabelToEnum(dto.roomType),
         capacity: dto.capacity,
         pricePerNight: dto.pricePerNight,
         isAvailable: dto.isAvailable,
@@ -114,7 +143,9 @@ export class RoomsService {
     const room = await this.prisma.room.update({
       where: { id },
       data: {
-        ...(dto.roomType !== undefined && { roomType: dto.roomType }),
+        ...(dto.roomType !== undefined && {
+          roomType: roomTypeLabelToEnum(dto.roomType),
+        }),
         ...(dto.capacity !== undefined && { capacity: dto.capacity }),
         ...(dto.pricePerNight !== undefined && {
           pricePerNight: dto.pricePerNight,
@@ -147,11 +178,41 @@ export class RoomsService {
     return hotel;
   }
 
+  private parseOptionalDateRange(
+    checkIn?: string,
+    checkOut?: string,
+  ): { checkIn: Date; checkOut: Date } | null {
+    if (checkIn === undefined && checkOut === undefined) {
+      return null;
+    }
+    if (checkIn === undefined || checkOut === undefined) {
+      throw new BadRequestException(
+        'checkIn and checkOut must both be provided to filter by stay dates',
+      );
+    }
+
+    const checkInDate = this.parseDate(checkIn);
+    const checkOutDate = this.parseDate(checkOut);
+    if (checkOutDate <= checkInDate) {
+      throw new BadRequestException('Check-out must be after check-in');
+    }
+
+    return { checkIn: checkInDate, checkOut: checkOutDate };
+  }
+
+  private parseDate(value: string): Date {
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException('Invalid date format');
+    }
+    return parsed;
+  }
+
   private toResponse(room: Room): RoomResponseDto {
     return {
       id: room.id,
       hotelId: room.hotelId,
-      roomType: room.roomType,
+      roomType: roomTypeEnumToLabel(room.roomType),
       capacity: room.capacity,
       pricePerNight: Number(room.pricePerNight),
       isAvailable: room.isAvailable,

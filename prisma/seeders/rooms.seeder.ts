@@ -1,39 +1,31 @@
-import { HotelStatus, Prisma, PrismaClient } from '@prisma/client';
+import { HotelStatus, Prisma, PrismaClient, RoomType } from '@prisma/client';
 import { SEED_HOTELS } from './hotels.seeder';
 
 export interface SeedRoomTemplate {
-  roomType: string;
+  roomType: RoomType;
   capacity: number;
   basePricePerNight: number;
 }
 
-/** Thirteen distinct room types applied to every seeded hotel. */
+/** Five room types applied to every seeded hotel. */
 export const SEED_ROOM_TEMPLATES: SeedRoomTemplate[] = [
-  { roomType: 'Standard Single', capacity: 1, basePricePerNight: 89 },
-  { roomType: 'Standard Double', capacity: 2, basePricePerNight: 109 },
-  { roomType: 'Economy Twin', capacity: 2, basePricePerNight: 99 },
-  { roomType: 'Superior Queen', capacity: 2, basePricePerNight: 139 },
-  { roomType: 'Deluxe King', capacity: 2, basePricePerNight: 169 },
-  { roomType: 'Junior Suite', capacity: 3, basePricePerNight: 199 },
-  { roomType: 'Executive Suite', capacity: 3, basePricePerNight: 249 },
-  { roomType: 'Family Room', capacity: 4, basePricePerNight: 219 },
-  { roomType: 'Connecting Double', capacity: 4, basePricePerNight: 189 },
-  { roomType: 'Accessible Room', capacity: 2, basePricePerNight: 129 },
-  { roomType: 'Studio Apartment', capacity: 2, basePricePerNight: 179 },
-  { roomType: 'Penthouse Suite', capacity: 4, basePricePerNight: 399 },
-  { roomType: 'Presidential Suite', capacity: 6, basePricePerNight: 599 },
+  { roomType: RoomType.STANDARD_SINGLE, capacity: 1, basePricePerNight: 89 },
+  { roomType: RoomType.STANDARD_DOUBLE, capacity: 2, basePricePerNight: 109 },
+  { roomType: RoomType.DELUXE_KING, capacity: 2, basePricePerNight: 169 },
+  { roomType: RoomType.JUNIOR_SUITE, capacity: 3, basePricePerNight: 199 },
+  { roomType: RoomType.FAMILY_ROOM, capacity: 4, basePricePerNight: 219 },
 ];
 
 export interface SeedRoomInput {
   id: string;
   hotelId: string;
-  roomType: string;
+  roomType: RoomType;
   capacity: number;
   pricePerNight: Prisma.Decimal;
   isAvailable: boolean;
 }
 
-/** Stable UUID: hotel index (0001–0012) + room index (0001–0013). */
+/** Stable UUID: hotel index (0001–0012) + room index (0001–0005). */
 export function seedRoomId(hotelIndex: number, roomIndex: number): string {
   const h = String(hotelIndex).padStart(4, '0');
   const r = String(roomIndex).padStart(4, '0');
@@ -70,7 +62,7 @@ export function buildSeedRooms(): SeedRoomInput[] {
 export const SEED_ROOMS = buildSeedRooms();
 
 /**
- * Upserts 13 rooms per seeded hotel (156 total for 12 hotels).
+ * Upserts 5 rooms per seeded hotel (60 total for 12 hotels).
  * Run after {@link seedHotels}.
  */
 export async function seedRooms(prisma: PrismaClient): Promise<void> {

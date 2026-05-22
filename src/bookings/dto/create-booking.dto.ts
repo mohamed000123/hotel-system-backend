@@ -3,8 +3,10 @@ import {
   IsDateString,
   IsInt,
   IsUUID,
+  Max,
   Min,
 } from 'class-validator';
+import { ROOM_CAPACITY_MAX } from '../../rooms/room-limits';
 
 export class CreateBookingDto {
   @IsUUID()
@@ -22,5 +24,6 @@ export class CreateBookingDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(ROOM_CAPACITY_MAX)
   guestCount!: number;
 }

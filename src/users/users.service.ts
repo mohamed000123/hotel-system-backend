@@ -41,27 +41,15 @@ export class UsersService {
     const skip = (page - 1) * limit;
 
     if (actor.role === Role.SUPER_ADMIN) {
+      if (query.role === Role.HOTEL_MANAGER) {
+        return this.listUsersByRole(Role.HOTEL_MANAGER, page, limit, skip);
+      }
       if (query.role && query.role !== Role.ADMIN) {
         throw new ForbiddenException(
-          'Super Admin may only list Admin accounts',
+          'Super Admin may only list Admin or Hotel Manager accounts',
         );
       }
-      const where = { role: Role.ADMIN };
-      const [users, total] = await Promise.all([
-        this.prisma.user.findMany({
-          where,
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: limit,
-        }),
-        this.prisma.user.count({ where }),
-      ]);
-      return {
-        data: users.map((u) => this.toResponse(u)),
-        page,
-        limit,
-        total,
-      };
+      return this.listUsersByRole(Role.ADMIN, page, limit, skip);
     }
 
     if (actor.role === Role.ADMIN) {
@@ -70,22 +58,7 @@ export class UsersService {
           'Admins may only list Hotel Manager accounts',
         );
       }
-      const where = { role: Role.HOTEL_MANAGER };
-      const [users, total] = await Promise.all([
-        this.prisma.user.findMany({
-          where,
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: limit,
-        }),
-        this.prisma.user.count({ where }),
-      ]);
-      return {
-        data: users.map((u) => this.toResponse(u)),
-        page,
-        limit,
-        total,
-      };
+      return this.listUsersByRole(Role.HOTEL_MANAGER, page, limit, skip);
     }
 
     throw new ForbiddenException('You do not have permission for this action');
@@ -201,15 +174,23 @@ export class UsersService {
 
   private assertCanCreate(actor: JwtPayloadUser, dto: CreateUserDto): void {
     if (actor.role === Role.SUPER_ADMIN) {
-      if (dto.role !== Role.ADMIN) {
-        throw new ForbiddenException(
-          'Super Admin may only create Admin accounts',
-        );
+      if (dto.role === Role.ADMIN) {
+        if (dto.hotelId) {
+          throw new BadRequestException(
+            'hotelId is not allowed when creating an Admin',
+          );
+        }
+        return;
       }
-      if (dto.hotelId) {
-        throw new BadRequestException('hotelId is not allowed when creating an Admin');
+      if (dto.role === Role.HOTEL_MANAGER) {
+        if (!dto.hotelId) {
+          throw new BadRequestException('hotelId is required for Hotel Manager');
+        }
+        return;
       }
-      return;
+      throw new ForbiddenException(
+        'Super Admin may only create Admin or Hotel Manager accounts',
+      );
     }
 
     if (actor.role === Role.ADMIN) {
@@ -241,20 +222,33 @@ export class UsersService {
     }
 
     if (actor.role === Role.SUPER_ADMIN) {
-      if (target.role !== Role.ADMIN) {
-        throw new ForbiddenException(
-          'Super Admin may only manage Admin accounts',
-        );
+      if (target.role === Role.HOTEL_MANAGER) {
+        if (dto.role === Role.ADMIN) {
+          throw new ForbiddenException(
+            'Super Admin may only assign the Hotel Manager role',
+          );
+        }
+        if (dto.role && dto.role !== Role.HOTEL_MANAGER) {
+          throw new ForbiddenException(
+            'Super Admin may only assign the Hotel Manager role',
+          );
+        }
+        return;
       }
-      if (dto.role && dto.role !== Role.ADMIN) {
-        throw new ForbiddenException(
-          'Super Admin may only assign the Admin role',
-        );
+      if (target.role === Role.ADMIN) {
+        if (dto.role && dto.role !== Role.ADMIN) {
+          throw new ForbiddenException(
+            'Super Admin may only assign the Admin role',
+          );
+        }
+        if (dto.hotelId) {
+          throw new BadRequestException('hotelId is not allowed for Admin accounts');
+        }
+        return;
       }
-      if (dto.hotelId) {
-        throw new BadRequestException('hotelId is not allowed for Admin accounts');
-      }
-      return;
+      throw new ForbiddenException(
+        'Super Admin may only manage Admin or Hotel Manager accounts',
+      );
     }
 
     if (actor.role === Role.ADMIN) {
@@ -293,10 +287,10 @@ export class UsersService {
       );
     }
 
-    if (actor.role === Role.ADMIN) {
+    if (actor.role === Role.SUPER_ADMIN || actor.role === Role.ADMIN) {
       if (target.role !== Role.HOTEL_MANAGER) {
         throw new ForbiddenException(
-          'Admins may only delete Hotel Manager accounts',
+          'You may only delete Hotel Manager accounts',
         );
       }
       return;
@@ -307,16 +301,41 @@ export class UsersService {
 
   /**
    * Staff provisioned with a temporary password must change it on first login.
-   * Super Admin → Admin; Admin → Hotel Manager (per role matrix).
+   * Super Admin → Admin or Hotel Manager; Admin → Hotel Manager.
    */
   private requiresPasswordChangeOnFirstLogin(
     actorRole: Role,
     createdRole: Role,
   ): boolean {
     return (
-      (actorRole === Role.SUPER_ADMIN && createdRole === Role.ADMIN) ||
+      (actorRole === Role.SUPER_ADMIN &&
+        (createdRole === Role.ADMIN || createdRole === Role.HOTEL_MANAGER)) ||
       (actorRole === Role.ADMIN && createdRole === Role.HOTEL_MANAGER)
     );
+  }
+
+  private async listUsersByRole(
+    role: Role,
+    page: number,
+    limit: number,
+    skip: number,
+  ): Promise<UserListResponseDto> {
+    const where = { role };
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+    return {
+      data: users.map((u) => this.toResponse(u)),
+      page,
+      limit,
+      total,
+    };
   }
 
   private async assertHotelExists(hotelId: string): Promise<void> {
