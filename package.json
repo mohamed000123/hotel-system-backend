@@ -11,7 +11,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
-    "seed": "prisma db seed"
+    "seed": "prisma db seed",
+    "seed:hotels": "ts-node --project prisma/tsconfig.seed.json prisma/seed-hotels.ts"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"

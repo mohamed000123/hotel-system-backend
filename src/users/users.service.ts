@@ -21,22 +21,47 @@ export interface UserResponseDto {
   createdAt: Date;
 }
 
+export interface UserListResponseDto {
+  data: UserResponseDto[];
+  page: number;
+  limit: number;
+  total: number;
+}
+
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(actor: JwtPayloadUser, query: ListUsersQueryDto): Promise<UserResponseDto[]> {
+  async list(
+    actor: JwtPayloadUser,
+    query: ListUsersQueryDto,
+  ): Promise<UserListResponseDto> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+
     if (actor.role === Role.SUPER_ADMIN) {
       if (query.role && query.role !== Role.ADMIN) {
         throw new ForbiddenException(
           'Super Admin may only list Admin accounts',
         );
       }
-      const users = await this.prisma.user.findMany({
-        where: { role: Role.ADMIN },
-        orderBy: { createdAt: 'desc' },
-      });
-      return users.map((u) => this.toResponse(u));
+      const where = { role: Role.ADMIN };
+      const [users, total] = await Promise.all([
+        this.prisma.user.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limit,
+        }),
+        this.prisma.user.count({ where }),
+      ]);
+      return {
+        data: users.map((u) => this.toResponse(u)),
+        page,
+        limit,
+        total,
+      };
     }
 
     if (actor.role === Role.ADMIN) {
@@ -45,11 +70,22 @@ export class UsersService {
           'Admins may only list Hotel Manager accounts',
         );
       }
-      const users = await this.prisma.user.findMany({
-        where: { role: Role.HOTEL_MANAGER },
-        orderBy: { createdAt: 'desc' },
-      });
-      return users.map((u) => this.toResponse(u));
+      const where = { role: Role.HOTEL_MANAGER };
+      const [users, total] = await Promise.all([
+        this.prisma.user.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limit,
+        }),
+        this.prisma.user.count({ where }),
+      ]);
+      return {
+        data: users.map((u) => this.toResponse(u)),
+        page,
+        limit,
+        total,
+      };
     }
 
     throw new ForbiddenException('You do not have permission for this action');
@@ -67,15 +103,22 @@ export class UsersService {
 
     if (dto.role === Role.HOTEL_MANAGER) {
       await this.assertHotelExists(dto.hotelId!);
+      await this.assertHotelHasNoManager(dto.hotelId!);
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
+    const mustChangePassword = this.requiresPasswordChangeOnFirstLogin(
+      actor.role,
+      dto.role,
+    );
+
     const user = await this.prisma.user.create({
       data: {
         email: dto.email,
         passwordHash,
         role: dto.role,
         hotelId: dto.role === Role.HOTEL_MANAGER ? dto.hotelId! : null,
+        mustChangePassword,
       },
     });
 
@@ -119,6 +162,10 @@ export class UsersService {
 
     if (nextRole === Role.HOTEL_MANAGER && !nextHotelId) {
       throw new BadRequestException('hotelId is required for Hotel Manager');
+    }
+
+    if (nextRole === Role.HOTEL_MANAGER && nextHotelId) {
+      await this.assertHotelHasNoManager(nextHotelId, target.id);
     }
 
     const user = await this.prisma.user.update({
@@ -212,10 +259,42 @@ export class UsersService {
     throw new ForbiddenException('You do not have permission for this action');
   }
 
+  /**
+   * Staff provisioned with a temporary password must change it on first login.
+   * Super Admin → Admin; Admin → Hotel Manager (per role matrix).
+   */
+  private requiresPasswordChangeOnFirstLogin(
+    actorRole: Role,
+    createdRole: Role,
+  ): boolean {
+    return (
+      (actorRole === Role.SUPER_ADMIN && createdRole === Role.ADMIN) ||
+      (actorRole === Role.ADMIN && createdRole === Role.HOTEL_MANAGER)
+    );
+  }
+
   private async assertHotelExists(hotelId: string): Promise<void> {
     const hotel = await this.prisma.hotel.findUnique({ where: { id: hotelId } });
     if (!hotel) {
       throw new BadRequestException('Assigned hotel does not exist');
+    }
+  }
+
+  private async assertHotelHasNoManager(
+    hotelId: string,
+    excludeUserId?: string,
+  ): Promise<void> {
+    const existingManager = await this.prisma.user.findFirst({
+      where: {
+        role: Role.HOTEL_MANAGER,
+        hotelId,
+        ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
+      },
+    });
+    if (existingManager) {
+      throw new ConflictException(
+        'This hotel already has a manager. Cannot assign two managers to the same hotel.',
+      );
     }
   }
 

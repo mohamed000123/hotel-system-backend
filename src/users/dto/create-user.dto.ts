@@ -4,9 +4,9 @@ import {
   IsEnum,
   IsString,
   IsUUID,
-  MinLength,
   ValidateIf,
 } from 'class-validator';
+import { IsStrongPassword } from '../../common/decorators/is-strong-password.decorator';
 
 const STAFF_ROLES = [Role.ADMIN, Role.HOTEL_MANAGER] as const;
 
@@ -15,7 +15,7 @@ export class CreateUserDto {
   email!: string;
 
   @IsString()
-  @MinLength(8)
+  @IsStrongPassword()
   password!: string;
 
   @IsEnum(STAFF_ROLES)

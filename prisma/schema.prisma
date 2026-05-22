@@ -30,15 +30,16 @@ enum PaymentStatus {
 }
 
 model User {
-  id           String    @id @default(uuid())
-  email        String    @unique
-  passwordHash String
-  role         Role
-  hotelId      String?
-  hotel        Hotel?    @relation(fields: [hotelId], references: [id])
-  bookings     Booking[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  passwordHash       String
+  role               Role
+  hotelId            String?   @unique
+  hotel              Hotel?    @relation(fields: [hotelId], references: [id])
+  mustChangePassword Boolean   @default(false)
+  bookings           Booking[]
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 }
 
 model Hotel {

@@ -38,8 +38,10 @@ Seed scripts live in `prisma/seeders/`:
 | File | Purpose |
 |------|---------|
 | `seeders/super-admin.seeder.ts` | Upsert Super Admin from `.env` |
+| `seeders/hotels.seeder.ts` | Upsert 10 demo hotels (9 active, 1 inactive) |
 | `seeders/index.ts` | Runs all seeders |
 | `seed.ts` | Prisma entry point (loads `backend/.env`) |
+| `seed-hotels.ts` | Hotels-only entry point |
 
 Add to `backend/.env`:
 
@@ -55,7 +57,15 @@ npm run seed
 # or: npm run prisma:seed
 ```
 
-This creates/updates the Super Admin. Login at `/login` with those credentials.
+This creates/updates the Super Admin and 10 sample hotels. Login at `/login` with those credentials.
+
+### Hotels only
+
+```powershell
+npm run seed:hotels
+```
+
+Re-running is safe: hotels use fixed IDs and are upserted, not duplicated.
 
 ## Troubleshooting
 

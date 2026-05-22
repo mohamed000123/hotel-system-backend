@@ -12,4 +12,5 @@ export interface JwtPayloadUser {
   email: string;
   role: Role;
   hotelId?: string | null;
+  mustChangePassword: boolean;
 }
