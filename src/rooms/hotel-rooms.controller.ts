@@ -22,7 +22,6 @@ export class HotelRoomsController {
   constructor(private readonly roomsService: RoomsService) {}
 
   @Get()
-  @Roles(...ROOM_INVENTORY_ROLES)
   list(
     @Param('hotelId') hotelId: string,
     @Req() req: Request & { user: JwtPayloadUser },

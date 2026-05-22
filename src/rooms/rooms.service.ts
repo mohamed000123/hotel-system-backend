@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, Role, Room } from '@prisma/client';
+import { HotelStatus, Prisma, Role, Room } from '@prisma/client';
 import { JwtPayloadUser } from '../common/interfaces/jwt-payload.interface';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { HotelsService } from '../hotels/hotels.service';
@@ -39,14 +39,24 @@ export class RoomsService {
     actor: JwtPayloadUser,
     query: PaginationQueryDto,
   ): Promise<RoomListResponseDto> {
-    await this.assertHotelExists(hotelId);
-    this.assertCanAccessHotel(actor, hotelId);
+    const hotel = await this.assertHotelExists(hotelId);
 
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
 
     const where: Prisma.RoomWhereInput = { hotelId };
+
+    if (actor.role === Role.HOTEL_MANAGER) {
+      this.assertCanManageHotel(actor, hotelId);
+    } else if (actor.role === Role.GUEST) {
+      if (hotel.status !== HotelStatus.ACTIVE) {
+        throw new ForbiddenException(
+          'Rooms are only visible for active hotels',
+        );
+      }
+      where.isAvailable = true;
+    }
 
     const [rooms, total] = await Promise.all([
       this.prisma.room.findMany({
@@ -118,17 +128,6 @@ export class RoomsService {
     return this.toResponse(room);
   }
 
-  private assertCanAccessHotel(actor: JwtPayloadUser, hotelId: string): void {
-    if (actor.role !== Role.HOTEL_MANAGER) {
-      throw new ForbiddenException('Insufficient permissions for room inventory');
-    }
-    if (!actor.hotelId || actor.hotelId !== hotelId) {
-      throw new ForbiddenException(
-        'You may only view rooms for your assigned hotel',
-      );
-    }
-  }
-
   private assertCanManageHotel(actor: JwtPayloadUser, hotelId: string): void {
     if (actor.role !== Role.HOTEL_MANAGER) {
       throw new ForbiddenException('Insufficient permissions for room inventory');
@@ -140,11 +139,12 @@ export class RoomsService {
     }
   }
 
-  private async assertHotelExists(hotelId: string): Promise<void> {
+  private async assertHotelExists(hotelId: string) {
     const hotel = await this.prisma.hotel.findUnique({ where: { id: hotelId } });
     if (!hotel) {
       throw new NotFoundException('Hotel not found');
     }
+    return hotel;
   }
 
   private toResponse(room: Room): RoomResponseDto {
