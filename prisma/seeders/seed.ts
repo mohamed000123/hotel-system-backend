@@ -1,10 +1,10 @@
 import { config } from 'dotenv';
 import { resolve } from 'path';
 import { PrismaClient } from '@prisma/client';
-import { runSeeders } from './seeders';
+import { runSeeders } from './index';
 
 // Load backend/.env (credentials for Super Admin seed live here)
-config({ path: resolve(__dirname, '../.env') });
+config({ path: resolve(__dirname, '../../.env') });
 
 const prisma = new PrismaClient();
 

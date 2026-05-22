@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -51,5 +54,15 @@ export class UsersController {
     @Body() dto: UpdateUserDto,
   ) {
     return this.usersService.update(req.user, id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Roles(...MANAGER_PROVISIONER_ROLES)
+  remove(
+    @Req() req: Request & { user: JwtPayloadUser },
+    @Param('id') id: string,
+  ) {
+    return this.usersService.remove(req.user, id);
   }
 }

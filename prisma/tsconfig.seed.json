@@ -6,5 +6,5 @@
     "strict": true,
     "skipLibCheck": true
   },
-  "include": ["seed.ts", "seed-hotels.ts", "seeders/**/*.ts"]
+  "include": ["seeders/**/*.ts"]
 }

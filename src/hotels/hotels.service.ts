@@ -79,11 +79,16 @@ export class HotelsService {
       throw new NotFoundException('Hotel not found');
     }
 
-    const availableRoomCount = await this.prisma.room.count({
-      where: { hotelId: id, isAvailable: true },
-    });
+    const availableRoomCount = await this.refreshAvailableRoomCount(id);
 
     return this.toResponse(hotel, availableRoomCount);
+  }
+
+  /** Recomputes available room count for a hotel (called after room inventory changes). */
+  async refreshAvailableRoomCount(hotelId: string): Promise<number> {
+    return this.prisma.room.count({
+      where: { hotelId, isAvailable: true },
+    });
   }
 
   async create(dto: CreateHotelDto): Promise<HotelResponseDto> {
@@ -116,9 +121,7 @@ export class HotelsService {
       },
     });
 
-    const availableRoomCount = await this.prisma.room.count({
-      where: { hotelId: id, isAvailable: true },
-    });
+    const availableRoomCount = await this.refreshAvailableRoomCount(id);
 
     return this.toResponse(hotel, availableRoomCount);
   }

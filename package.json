@@ -12,10 +12,11 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
     "seed": "prisma db seed",
-    "seed:hotels": "ts-node --project prisma/tsconfig.seed.json prisma/seed-hotels.ts"
+    "seed:hotels": "ts-node --project prisma/tsconfig.seed.json prisma/seeders/seed-hotels.ts",
+    "seed:rooms": "ts-node --project prisma/tsconfig.seed.json prisma/seeders/seed-rooms.ts"
   },
   "prisma": {
-    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
+    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seeders/seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.15",

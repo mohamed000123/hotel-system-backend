@@ -179,6 +179,26 @@ export class UsersService {
     return this.toResponse(user);
   }
 
+  async remove(actor: JwtPayloadUser, id: string): Promise<void> {
+    const target = await this.prisma.user.findUnique({ where: { id } });
+    if (!target) {
+      throw new NotFoundException('User not found');
+    }
+
+    this.assertCanDelete(actor, target);
+
+    const bookingCount = await this.prisma.booking.count({
+      where: { userId: id },
+    });
+    if (bookingCount > 0) {
+      throw new ConflictException(
+        'Cannot delete account with existing bookings',
+      );
+    }
+
+    await this.prisma.user.delete({ where: { id } });
+  }
+
   private assertCanCreate(actor: JwtPayloadUser, dto: CreateUserDto): void {
     if (actor.role === Role.SUPER_ADMIN) {
       if (dto.role !== Role.ADMIN) {
@@ -251,6 +271,32 @@ export class UsersService {
       if (dto.role && dto.role !== Role.HOTEL_MANAGER) {
         throw new ForbiddenException(
           'Admins may only assign the Hotel Manager role',
+        );
+      }
+      return;
+    }
+
+    throw new ForbiddenException('You do not have permission for this action');
+  }
+
+  private assertCanDelete(
+    actor: JwtPayloadUser,
+    target: { role: Role },
+  ): void {
+    if (target.role === Role.SUPER_ADMIN) {
+      throw new ForbiddenException('The Super Admin account cannot be deleted');
+    }
+
+    if (target.role === Role.GUEST) {
+      throw new ForbiddenException(
+        'Guest accounts cannot be deleted through this API',
+      );
+    }
+
+    if (actor.role === Role.ADMIN) {
+      if (target.role !== Role.HOTEL_MANAGER) {
+        throw new ForbiddenException(
+          'Admins may only delete Hotel Manager accounts',
         );
       }
       return;

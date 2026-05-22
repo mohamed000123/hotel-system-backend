@@ -1,10 +1,10 @@
 import { config } from 'dotenv';
 import { resolve } from 'path';
 import { PrismaClient } from '@prisma/client';
-import { seedHotels } from './seeders/hotels.seeder';
+import { seedHotels } from './hotels.seeder';
 
 /** Run only the hotel seeder: `npm run seed:hotels` */
-config({ path: resolve(__dirname, '../.env') });
+config({ path: resolve(__dirname, '../../.env') });
 
 const prisma = new PrismaClient();
 

@@ -31,17 +31,19 @@ If the database is empty, Prisma will create all tables (`User`, `Hotel`, `Room`
 
 A follow-up migration adds the `SUPER_ADMIN` role: `migrations/20260521120000_add_super_admin_role/`.
 
-## Seeders (Super Admin)
+## Seeders
 
-Seed scripts live in `prisma/seeders/`:
+All seed scripts live in `prisma/seeders/`:
 
 | File | Purpose |
 |------|---------|
 | `seeders/super-admin.seeder.ts` | Upsert Super Admin from `.env` |
-| `seeders/hotels.seeder.ts` | Upsert 10 demo hotels (9 active, 1 inactive) |
-| `seeders/index.ts` | Runs all seeders |
-| `seed.ts` | Prisma entry point (loads `backend/.env`) |
-| `seed-hotels.ts` | Hotels-only entry point |
+| `seeders/hotels.seeder.ts` | Upsert demo hotels |
+| `seeders/rooms.seeder.ts` | Upsert demo rooms (requires hotels) |
+| `seeders/index.ts` | Orchestrates all seeders (`runSeeders`) |
+| `seeders/seed.ts` | Prisma entry point — full seed (`npm run seed`) |
+| `seeders/seed-hotels.ts` | Hotels only (`npm run seed:hotels`) |
+| `seeders/seed-rooms.ts` | Hotels + rooms (`npm run seed:rooms`) |
 
 Add to `backend/.env`:
 
@@ -57,15 +59,16 @@ npm run seed
 # or: npm run prisma:seed
 ```
 
-This creates/updates the Super Admin and 10 sample hotels. Login at `/login` with those credentials.
+This runs Super Admin, hotels, and rooms. Login at `/login` with the Super Admin credentials.
 
-### Hotels only
+### Partial seeds
 
 ```powershell
-npm run seed:hotels
+npm run seed:hotels   # hotels only
+npm run seed:rooms    # hotels + rooms
 ```
 
-Re-running is safe: hotels use fixed IDs and are upserted, not duplicated.
+Re-running is safe: seed data uses fixed IDs and upserts instead of duplicating rows.
 
 ## Troubleshooting
 
