@@ -48,6 +48,8 @@ model User {
   bookings           Booking[]
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
+
+  @@map("user")
 }
 
 model Hotel {
@@ -66,6 +68,7 @@ model Hotel {
 
   @@index([city])
   @@index([name])
+  @@map("hotel")
 }
 
 model Room {
@@ -81,6 +84,7 @@ model Room {
   updatedAt     DateTime  @updatedAt
 
   @@index([hotelId])
+  @@map("room")
 }
 
 model Booking {
@@ -102,6 +106,7 @@ model Booking {
   updatedAt   DateTime      @updatedAt
 
   @@index([roomId, checkIn, checkOut, status])
+  @@map("booking")
 }
 
 model Payment {
@@ -111,4 +116,6 @@ model Payment {
   amount      Decimal       @db.Decimal(10, 2)
   status      PaymentStatus @default(COMPLETED)
   completedAt DateTime      @default(now())
+
+  @@map("payment")
 }
