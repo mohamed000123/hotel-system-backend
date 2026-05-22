@@ -1,7 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { markApiRequestStart } from './common/helpers/api-request.helper';
+import { ApiLoggingInterceptor } from './common/interceptors/api-logging.interceptor';
 import { appValidationPipe } from './common/pipes/validation.pipe';
 
 async function bootstrap() {
@@ -21,7 +24,12 @@ async function bootstrap() {
     origin: process.env.CORS_ORIGIN ?? 'http://localhost:3001',
     credentials: true,
   });
+  app.use((request: Request, _response: Response, next: NextFunction) => {
+    markApiRequestStart(request);
+    next();
+  });
   app.useGlobalPipes(appValidationPipe);
+  app.useGlobalInterceptors(new ApiLoggingInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter());
 
   const port = process.env.PORT ?? 3001;

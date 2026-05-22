@@ -4,8 +4,14 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { Request, Response } from 'express';
+import {
+  buildApiRequestContext,
+  getApiRequestDurationMs,
+  logApiRequestError,
+} from '../helpers/api-request.helper';
 
 export interface ApiErrorResponse {
   statusCode: number;
@@ -15,9 +21,13 @@ export interface ApiErrorResponse {
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(HttpExceptionFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
+    const request = ctx.getRequest<Request>();
     const response = ctx.getResponse<Response>();
+    const requestContext = buildApiRequestContext(request);
 
     let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal server error';
@@ -51,6 +61,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message,
       error,
     };
+
+    const durationMs = getApiRequestDurationMs(request);
+    logApiRequestError(this.logger, requestContext, exception, durationMs);
 
     response.status(statusCode).json(payload);
   }
