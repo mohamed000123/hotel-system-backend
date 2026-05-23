@@ -287,10 +287,19 @@ export class UsersService {
       );
     }
 
-    if (actor.role === Role.SUPER_ADMIN || actor.role === Role.ADMIN) {
+    if (actor.role === Role.SUPER_ADMIN) {
+      if (target.role !== Role.ADMIN && target.role !== Role.HOTEL_MANAGER) {
+        throw new ForbiddenException(
+          'Super Admin may only delete Admin or Hotel Manager accounts',
+        );
+      }
+      return;
+    }
+
+    if (actor.role === Role.ADMIN) {
       if (target.role !== Role.HOTEL_MANAGER) {
         throw new ForbiddenException(
-          'You may only delete Hotel Manager accounts',
+          'Admins may only delete Hotel Manager accounts',
         );
       }
       return;

@@ -4,9 +4,11 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { createHash, randomUUID, timingSafeEqual } from 'crypto';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -22,8 +24,12 @@ export interface AuthUserDto {
 }
 
 export interface AuthResponseDto {
-  accessToken: string;
   user: AuthUserDto;
+}
+
+interface RefreshTokenPayload extends JwtPayload {
+  tokenId: string;
+  type: 'refresh';
 }
 
 @Injectable()
@@ -31,6 +37,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
@@ -52,7 +59,7 @@ export class AuthService {
       },
     });
 
-    return this.buildAuthResponse(user);
+    return { user: this.toAuthUser(user) };
   }
 
   async login(dto: LoginDto): Promise<AuthResponseDto> {
@@ -68,7 +75,69 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    return this.buildAuthResponse(user);
+    return { user: this.toAuthUser(user) };
+  }
+
+  async refreshSession(refreshToken: string): Promise<AuthResponseDto> {
+    const payload = await this.verifyRefreshToken(refreshToken);
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+    });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const refreshSession = user as typeof user & {
+      refreshTokenHash?: string | null;
+      refreshTokenId?: string | null;
+    };
+    const storedTokenHash = refreshSession.refreshTokenHash ?? null;
+    const storedTokenId = refreshSession.refreshTokenId ?? null;
+    const incomingTokenHash = this.hashToken(refreshToken);
+    const hashMatches =
+      !!storedTokenHash &&
+      this.secureEquals(storedTokenHash, incomingTokenHash);
+    const tokenIdMatches = !!storedTokenId && storedTokenId === payload.tokenId;
+    if (!hashMatches || !tokenIdMatches) {
+      // Replay detection: if a rotated/old token is reused, invalidate the session.
+      await this.clearRefreshSession(user.id);
+      throw new UnauthorizedException('Refresh token replay detected');
+    }
+
+    return { user: this.toAuthUser(user) };
+  }
+
+  async issueSessionTokens(user: AuthUserDto): Promise<{
+    accessToken: string;
+    refreshToken: string;
+  }> {
+    const accessToken = this.buildAccessToken(user);
+    const refreshTokenId = randomUUID();
+    const refreshToken = this.buildRefreshToken(user, refreshTokenId);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        refreshTokenHash: this.hashToken(refreshToken),
+        refreshTokenId,
+        refreshTokenIssuedAt: new Date(),
+      } as any,
+    });
+
+    return { accessToken, refreshToken };
+  }
+
+  async logoutByRefreshToken(refreshToken?: string): Promise<void> {
+    if (!refreshToken) {
+      return;
+    }
+
+    try {
+      const payload = await this.verifyRefreshToken(refreshToken);
+      await this.clearRefreshSession(payload.sub);
+    } catch {
+      // Invalid/expired refresh token should still clear client cookies in controller.
+    }
   }
 
   async getProfile(userId: string): Promise<AuthUserDto> {
@@ -140,22 +209,89 @@ export class AuthService {
     };
   }
 
-  private buildAuthResponse(user: {
+  buildAccessToken(user: {
     id: string;
     email: string;
     role: Role;
     hotelId: string | null;
     mustChangePassword: boolean;
-  }): AuthResponseDto {
+  }): string {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
       role: user.role,
       hotelId: user.hotelId,
     };
-    return {
-      accessToken: this.jwtService.sign(payload),
-      user: this.toAuthUser(user),
+    return this.jwtService.sign(payload);
+  }
+
+  buildRefreshToken(
+    user: {
+    id: string;
+    email: string;
+    role: Role;
+    hotelId: string | null;
+    },
+    tokenId: string,
+  ): string {
+    const secret =
+      this.configService.get<string>('JWT_REFRESH_SECRET') ??
+      this.configService.getOrThrow<string>('JWT_SECRET');
+    const payload: RefreshTokenPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      hotelId: user.hotelId,
+      tokenId,
+      type: 'refresh',
     };
+    return this.jwtService.sign(payload, {
+      secret,
+      expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d'),
+    });
+  }
+
+  private async verifyRefreshToken(token: string): Promise<RefreshTokenPayload> {
+    const secret =
+      this.configService.get<string>('JWT_REFRESH_SECRET') ??
+      this.configService.getOrThrow<string>('JWT_SECRET');
+    let payload: RefreshTokenPayload;
+    try {
+      payload = await this.jwtService.verifyAsync<RefreshTokenPayload>(token, {
+        secret,
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    if (payload.type !== 'refresh' || !payload.tokenId) {
+      throw new UnauthorizedException('Invalid refresh token payload');
+    }
+
+    return payload;
+  }
+
+  private async clearRefreshSession(userId: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        refreshTokenHash: null,
+        refreshTokenId: null,
+        refreshTokenIssuedAt: null,
+      } as any,
+    });
+  }
+
+  private hashToken(value: string): string {
+    return createHash('sha256').update(value).digest('hex');
+  }
+
+  private secureEquals(a: string, b: string): boolean {
+    const aBuffer = Buffer.from(a);
+    const bBuffer = Buffer.from(b);
+    if (aBuffer.length !== bBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(aBuffer, bBuffer);
   }
 }

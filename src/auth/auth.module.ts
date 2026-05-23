@@ -4,6 +4,8 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 
+const ACCESS_TOKEN_EXPIRES_IN = '15m';
+
 @Module({
   imports: [
     JwtModule.registerAsync({
@@ -12,7 +14,7 @@ import { AuthService } from './auth.service';
       useFactory: (config: ConfigService) => ({
         secret: config.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
-          expiresIn: config.get<string>('JWT_EXPIRES_IN', '1d'),
+          expiresIn: ACCESS_TOKEN_EXPIRES_IN,
         },
       }),
     }),

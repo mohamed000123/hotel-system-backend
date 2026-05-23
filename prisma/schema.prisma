@@ -45,6 +45,9 @@ model User {
   hotelId            String?   @unique
   hotel              Hotel?    @relation(fields: [hotelId], references: [id])
   mustChangePassword Boolean   @default(false)
+  refreshTokenHash   String?
+  refreshTokenId     String?
+  refreshTokenIssuedAt DateTime?
   bookings           Booking[]
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt

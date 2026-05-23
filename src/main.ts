@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
 import { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -21,9 +22,10 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
   app.enableCors({
-    origin: process.env.CORS_ORIGIN ?? 'http://localhost:3001',
+    origin: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
     credentials: true,
   });
+  app.use(cookieParser());
   app.use((request: Request, _response: Response, next: NextFunction) => {
     markApiRequestStart(request);
     next();
@@ -32,7 +34,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ApiLoggingInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  const port = process.env.PORT ?? 3001;
+  const port = process.env.PORT ?? 3000;
   await app.listen(port);
 }
 
